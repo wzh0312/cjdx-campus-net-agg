@@ -1,0 +1,7 @@
+# 这些是 OpenWrt / Linux 的 shell 脚本、配置与 nft 规则文件。
+# 必须统一 LF —— CRLF 会让脚本无法执行、nft 解析失败。
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary

@@ -1,0 +1,59 @@
+chain drcom_lb {
+	type filter hook prerouting priority mangle + 5; policy accept;
+
+	# ============================================================
+	#  四路负载均衡 · 标记链（生产版）
+	#  文件: /etc/nftables.d/99-drcom-lb.nft  ← 由本文件部署而来
+	#  源文件: /etc/drcom/lb_mark.nft
+	# ------------------------------------------------------------
+	#  结构说明（务必保留单规则形式）:
+	#    TCP/UDP 各自只用【1 条】规则做新连接分配，配合 map 一次性定值。
+	#
+	#    ⚠️ 不要改回「4 条规则各比较 jhash 的一个取值」的写法。
+	#       实测对照（每轮 100+ 连接）:
+	#         4 规则 + 护栏        → 漏标 28%
+	#         4 规则 去护栏        → 漏标 34%（TCP 46% / UDP 30%）
+	#         单规则 + map（本版） → 漏标 0%（连续 4 轮 890 条连接）
+	#       多规则结构在高并发下会出现部分连接四条规则全部不匹配，
+	#       导致 ct mark 保持 0、落到 main 表、全部挤到 A 路。
+	#       （底层内核机制尚未查明，但因果关系已多轮复现）
+	# ------------------------------------------------------------
+	#  字段与掩码:
+	#    决策存于 ct mark 的 bit16-23（值 0x00010000 / 0x00020000
+	#    / 0x00030000 / 0x00040000，分别对应 A / B / C / D）
+	#    ip rule pref 2000-2003 按 fwmark/0x00FF0000 匹配并选表
+	#
+	#  ⚠️ 已知取舍: ct mark set <map> 是【整值赋值】，会清掉 ct mark 的低 16 位。
+	#     实测全系统无其他组件使用 ct mark（OpenClash 0 次，passwall/sing-box 无），
+	#     故无实际影响。若将来出现 ct mark 使用者，见 /etc/drcom/ctmark_watch.sh
+	#     的只读告警。meta mark 侧仍用 mask 保护 OpenClash 的 0x162 位。
+	# ============================================================
+
+	# ---------- 1) TCP 新连接分配（单规则） ----------
+	iifname "br-lan" ct state new meta l4proto tcp \
+		ct mark set jhash ip saddr . ip daddr . ip protocol . tcp sport . tcp dport mod 4 \
+		map { 0 : 0x00010000, 1 : 0x00020000, 2 : 0x00030000, 3 : 0x00040000 }
+
+	# ---------- 2) UDP 新连接分配（单规则） ----------
+	iifname "br-lan" ct state new meta l4proto udp \
+		ct mark set jhash ip saddr . ip daddr . ip protocol . udp sport . udp dport mod 4 \
+		map { 0 : 0x00010000, 1 : 0x00020000, 2 : 0x00030000, 3 : 0x00040000 }
+
+	# ---------- 3) 非 TCP/UDP 兜底（ICMP 等，单规则） ----------
+	iifname "br-lan" ct state new meta l4proto != { tcp, udp } \
+		ct mark set jhash ip saddr . ip daddr . ip protocol mod 4 \
+		map { 0 : 0x00010000, 1 : 0x00020000, 2 : 0x00030000, 3 : 0x00040000 }
+
+	# ---------- 4) ct mark -> meta mark 恢复（仅 LAN 入向） ----------
+	#   iifname "br-lan" 是硬性要求:
+	#     * LAN->WAN 正向包：进 br-lan，恢复 mark，才能命中 ip rule 选路
+	#     * WAN->LAN 回包：进 wanX，不设 mark，按目的地址走 main 表，
+	#       否则回包会命中 fwmark 规则查到只有 default 的 table 100/101/102
+	#     * 路由器本机流量：无 iifname，天然不参与负载均衡
+	#   meta mark 用 mask 只改 bit16-23，保留 OpenClash 的 0x162 位
+	#   | 右侧必须是常量，故拆成 4 条（这是常量比较，不涉及 jhash，可靠）
+	iifname "br-lan" ( ct mark and 0x00FF0000 ) == 0x00010000 meta mark set ( meta mark and 0xFF00FFFF ) | 0x00010000
+	iifname "br-lan" ( ct mark and 0x00FF0000 ) == 0x00020000 meta mark set ( meta mark and 0xFF00FFFF ) | 0x00020000
+	iifname "br-lan" ( ct mark and 0x00FF0000 ) == 0x00030000 meta mark set ( meta mark and 0xFF00FFFF ) | 0x00030000
+	iifname "br-lan" ( ct mark and 0x00FF0000 ) == 0x00040000 meta mark set ( meta mark and 0xFF00FFFF ) | 0x00040000
+}

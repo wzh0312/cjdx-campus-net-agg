@@ -1,0 +1,13 @@
+# drcom-lb: LAN -> B/C/D(apclix0) 转发放行
+# 本文件由 fw4 以 chain-prepend 方式插入 inet fw4 的 forward_lan 链头部，
+# 位置在 jump accept_to_wan 之前。
+# accept 在此处是 fw4 forward 基链（policy drop）的终止裁决，
+# 因此不会再走到 forward 链末尾的 jump handle_reject。
+#
+# 2026-10-09: 追加 lan2 —— D 线路从 wand 迁到 lan2（第二条上行）。
+# 2026-10-11: D 线路由 lan2 改为 apclix0（校园 5G STA），lan2 弃用。
+# 注意：本文件只允许包含「语句」，不能有 chain 定义。
+iifname "br-lan" oifname "wanb" counter accept comment "drcom-lb: lan->wanb"
+iifname "br-lan" oifname "wanc" counter accept comment "drcom-lb: lan->wanc"
+iifname "br-lan" oifname "wand" counter accept comment "drcom-lb: lan->wand"
+iifname "br-lan" oifname "apclix0" counter accept comment "drcom-lb: lan->apclix0"

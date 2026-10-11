@@ -1,0 +1,14 @@
+# /etc/drcom/cred-*.conf —— 单条线路的凭据文件（chmod 600 root:root）
+#
+# 第 1 行 = 校园网账号
+# 第 2 行 = 预先在本地算好的 Dr.COM upass（文件内不含明文密码）
+#
+# upass 计算方式（某一厂商/门户实现，其他校园可能不同）：
+#   upass = md5("2" + password + "12345678") + "12345678" + "2"
+#
+# ⚠️ 本文件仅作格式示例。真实凭据请放到 /etc/drcom/cred-*.conf 并设 600 权限。
+# ⚠️ upass 是与明文密码等价的凭据，切勿提交到版本库或出现在日志里。
+#
+# 固定长度校验：autoauth/multiauth 要求第 2 行为 41 个字符。
+YOUR_ACCOUNT_HERE
+PUT_THE_41_CHAR_UPASS_HERE_XXXXXXXXXXXXXX

@@ -1,0 +1,34 @@
+#!/bin/sh /etc/rc.common
+# ============================================================
+#  /etc/init.d/drcom-multi
+#  开机拉起多线路逻辑 WAN（macvlan + DHCP + 策略路由）并做一次认证
+#
+#  START=96 -> 在 network(S20) / firewall(S19) 之后
+#  只管理 type=macvlan 的线路；账号A 的 wan 由 netifd 自己管，本脚本不碰
+# ============================================================
+
+START=96
+STOP=11
+
+start() {
+	logger -t drcom-multi "init: start"
+	[ -x /etc/drcom/wanx_setup.sh ] && /etc/drcom/wanx_setup.sh
+	# 给 DHCP 一点时间，然后跑一轮认证（后续由 cron 每 2 分钟兜底）
+	( sleep 20; [ -x /etc/drcom/multiauth.sh ] && /etc/drcom/multiauth.sh ) &
+}
+
+stop() {
+	logger -t drcom-multi "init: stop"
+	for N in wanb wanc wand; do
+		PIDF=/var/run/udhcpc-$N.pid
+		[ -f "$PIDF" ] && kill "$(cat $PIDF)" 2>/dev/null
+		rm -f "$PIDF"
+		ip link del "$N" 2>/dev/null
+	done
+}
+
+restart() {
+	stop
+	sleep 2
+	start
+}

@@ -1,0 +1,25 @@
+#!/bin/sh /etc/rc.common
+# /etc/init.d/drcom-wifi-line
+# 开机拉起校园 5G STA 线路（LB 的 D 槽: apclix0）。
+# START=95 -> 在 network(S20) 之后、drcom-multi(S96) 之前，确保 udhcpc 启动前 STA 已关联。
+# 真正的逻辑在 /etc/drcom/wifi-line-up.sh（幂等）；cron 每 2 分钟也会兜底自愈。
+
+START=95
+STOP=12
+
+start() {
+	logger -t drcom-wifi-line "init: start"
+	[ -x /etc/drcom/wifi-line-up.sh ] && /etc/drcom/wifi-line-up.sh
+}
+
+stop() {
+	logger -t drcom-wifi-line "init: stop"
+	iwpriv apclix0 set ApCliEnable=0 2>/dev/null
+	ip link set apclix0 down 2>/dev/null
+}
+
+restart() {
+	stop
+	sleep 2
+	start
+}

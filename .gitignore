@@ -1,0 +1,7 @@
+# 凭据与本机配置 —— 绝不提交
+cred-*.conf
+drcom.conf
+*.secret
+*.key
+*.pem
+!examples/cred.conf.example

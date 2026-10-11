@@ -1,0 +1,20 @@
+# drcom-lb: LAN -> B/C/D(apclix0) 的显式 SNAT
+# 本文件由 fw4 以 chain-append 方式插入 inet fw4 的 srcnat 链尾部。
+#
+# 为什么必须显式写：
+#   实测 chain srcnat { oifname "wan" jump srcnat_wan } —— 只对 wan 生效，
+#   而 wanb/wanc/wand/apclix0 不在任何 zone，因此这些路原本完全没有 NAT。
+#
+# 用 masquerade 而非 snat to <ip>：出口地址是 DHCP 动态分配，
+#   masquerade 会自动取当前出口接口地址。
+# 源限定 192.168.6.0/24：只 NAT LAN 流量，
+#   路由器自身流量（源 校园网段（有线/无线，各自不同））不受影响，那部分由 pref 100-102 源策略处理。
+# A 路（wan）保持原样，由现有 srcnat_wan 处理，此处不重复不冲突。
+#
+# 2026-10-09: 追加 lan2。
+# 2026-10-11: D 线路由 lan2 改为 apclix0（校园 5G STA）。
+# 注意：本文件只允许包含「语句」，不能有 chain 定义。
+oifname "wanb" ip saddr 192.168.6.0/24 counter masquerade comment "drcom-lb: snat wanb"
+oifname "wanc" ip saddr 192.168.6.0/24 counter masquerade comment "drcom-lb: snat wanc"
+oifname "wand" ip saddr 192.168.6.0/24 counter masquerade comment "drcom-lb: snat wand"
+oifname "apclix0" ip saddr 192.168.6.0/24 counter masquerade comment "drcom-lb: snat apclix0"

@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+# 负载均衡层：开机恢复 ip rule + ct mark 使用者只读检查
+START=97
+STOP=10
+
+RULES="2000:0x00010000:main 2001:0x00020000:100 2002:0x00030000:101 2003:0x00040000:102"
+
+start() {
+	for r in $RULES; do
+		p=$(echo "$r" | cut -d: -f1)
+		m=$(echo "$r" | cut -d: -f2)
+		t=$(echo "$r" | cut -d: -f3)
+		ip rule del pref "$p" 2>/dev/null
+		ip rule add pref "$p" fwmark "$m/0x00FF0000" lookup "$t"
+	done
+	logger -t drcom-lb "ip rules restored (pref 2000-2003)"
+	# ct mark 使用者只读检查（只告警，不改规则）
+	( sleep 25; [ -x /etc/drcom/ctmark_watch.sh ] && /etc/drcom/ctmark_watch.sh >/dev/null 2>&1 ) &
+}
+
+stop() {
+	for p in 2000 2001 2002 2003; do ip rule del pref "$p" 2>/dev/null; done
+}
